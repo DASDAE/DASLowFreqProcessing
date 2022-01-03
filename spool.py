@@ -1,8 +1,16 @@
 
 
 import sys
+import numpy as np
 from dascore.core import Patch
+from dascore.utils.patch import merge_patches
 from collections import OrderedDict
+import pickle
+
+from .utils import load_pickle, save_pickle
+
+Patch.save_pickle = save_pickle
+Patch.load_pickle = load_pickle
 
 class spool:
     """
@@ -68,14 +76,15 @@ class spool:
     def _load_to_cashe(self,ind):
         filename = self._df['file'].iloc[ind]
         # check whether file is in cashe already
+        # if exist, move the file to the end
         if filename in self._cashe.keys():
+            self._cashe.move_to_end(filename)
             return False
         patch = self._reader(filename)
         self._cashe[filename] = patch
         # remove old data until cashe is smaller than limit
         while (self._estimate_cashe_size() > self._cashe_size_limit) \
             & (len(self._cashe)>1):
-            print('pop')
             self._cashe.popitem(last=False)
         return True
     
@@ -84,4 +93,41 @@ class spool:
         function to load data without partial loading support
         """
 
+        ind = np.where((self._df.start_time<edtime)
+                 &(self._df.end_time>bgtime))[0]
 
+        patch_list = []
+        for i in ind:
+            self._load_to_cashe(i)
+            p = self._cashe[self._df['file'].iloc[i]]
+            p = p.select(time=(bgtime,edtime))
+            patch_list.append(p)
+        
+        merged_patch = merge_patches(patch_list)
+
+        return merged_patch
+        
+    def _get_data_pl(self,bgtime,edtime):
+        # not tested
+        ind = np.where((self._df.start_time<edtime)
+                 &(self._df.end_time>bgtime))[0]
+
+        patch_list = []
+        for i in ind:
+            file = self._df['file'].iloc[i]
+            p = self._reader(file,bgtime,edtime)
+            patch_list.append(p)
+
+        merged_patch = merge_patches(patch_list)
+
+        return merged_patch
+
+
+    def get_patch(self,bgtime,edtime):
+        if self._partial_reading:
+            return self._get_data_pl(bgtime,edtime)
+        else:
+            return self._get_data_nopl(bgtime,edtime)
+
+    save_pickle = save_pickle
+    load_pickle = load_pickle
