@@ -7,7 +7,7 @@ from dascore.utils.patch import merge_patches
 from collections import OrderedDict
 import pickle
 
-from .utils import load_pickle, save_pickle
+from .spool_utils import load_pickle, save_pickle
 
 Patch.save_pickle = save_pickle
 Patch.load_pickle = load_pickle
@@ -36,7 +36,10 @@ class spool:
     def __init__(self,df = None,
                 reader = None,
                 support_partial_reading = False):
-        self._df = df
+        if df is None:
+            self._df = None
+        else:
+            self.set_database(df)
         self._reader = reader
         self._partial_reading = support_partial_reading
         self._cashe_size_limit = 1.0 # in GB
@@ -44,7 +47,7 @@ class spool:
         pass
 
     def set_database(self,df):
-        df = df.sort_values(by='start_time')
+        df = df.sort_values(by='start_time',ignore_index=True)
         self._df = df
 
     def set_reader(self,reader,support_partial_reading = False):
@@ -122,12 +125,37 @@ class spool:
 
         return merged_patch
 
-
     def get_patch(self,bgtime,edtime):
         if self._partial_reading:
             return self._get_data_pl(bgtime,edtime)
         else:
             return self._get_data_nopl(bgtime,edtime)
+
+    def get_time_segments(self,max_dt=None):
+        """
+        Spool method to obtain continuous time segments in the spool.
+        by checking the time differnce between start_timea and end_time
+        in the database
+        max_dt: maximum time difference tolerance for continuous data 
+        """
+        df = self._df
+
+        dt = (df['start_time'].iloc[1:].values - df['end_time'].iloc[:-1].values)\
+                /np.timedelta64(1,'s')
+
+        max_dt = np.median(dt)*1.5
+        ind = np.where(dt > max_dt)[0]
+        ind = np.concatenate(([-1],ind,[len(df)-1]))
+
+        time_segs = []
+
+        for i in range(len(ind)-1):
+            bgtime = df['start_time'].iloc[ind[i]+1]
+            edtime = df['end_time'].iloc[ind[i+1]]
+            time_segs.append((bgtime,edtime))
+        
+        return time_segs
+
 
     save_pickle = save_pickle
     load_pickle = load_pickle

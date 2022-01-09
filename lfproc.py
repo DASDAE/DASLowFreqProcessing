@@ -9,6 +9,7 @@ from datetime import datetime
 from dascore.utils.patch import merge_patches
 from dascore.core import Patch
 from glob import glob
+import matplotlib.pyplot as plt
 
 class lfproc:
 
@@ -51,25 +52,29 @@ class lfproc:
         time_grid = (np.arange(bgtime,edtime,
                 np.timedelta64(int(dt*1000),'ms')))
         
+        if len(time_grid)<=patch_size:
+            patch_size = len(time_grid)-1
+        
+        def lp_process(DASdata,bgind, edind):
+            # low pass filter and downsampling
+            lfDAS = DASdata.pass_filter(time=(None,1/dt/2*0.9))\
+                        .sel(time=time_grid[bgind:edind]
+                        ,method='nearest')
+            lfDAS = lfDAS.update_attrs(d_time=dt)
+            # output the result to output folder
+            filename = _get_filename(lfDAS.attrs['time_min'],
+                        lfDAS.attrs['time_max'])
+            filename = self._output_folder + '/' + filename
+            lfDAS.save_pickle(filename)
+        
         # load and process the first patch
         plist = self._spool.get_patch(time_grid[0],time_grid[patch_size])
         DASdata = _check_merge(plist)
         # low pass filter and downsampling
-        lfDAS = DASdata.pass_filter(time=(None,1/dt/2*0.9))\
-                    .sel(time=time_grid[buff_size:patch_size-buff_size]
-                    ,method='nearest')
-        lfDAS = lfDAS.update_attrs(d_time=dt)
-        # output the result to output folder
-        filename = _get_filename(lfDAS.attrs['time_min'],
-                    lfDAS.attrs['time_max'])
-        filename = self._output_folder + '/' + filename
-        lfDAS.save_pickle(filename)
+        lp_process(DASdata,buff_size,patch_size-buff_size)
 
-        # processing for the rest of the dataset
-        data_end = patch_size
-        new_data_end = data_end + patch_size-2*buff_size
-        while new_data_end < len(time_grid):
-            # readin new data
+        # define the processing flow to avoid repeat code
+        def merge_and_process(DASdata):
             plist = self._spool.get_patch(time_grid[data_end],time_grid[new_data_end])
             newdata = _check_merge(plist)
             # merge with existing one
@@ -77,18 +82,23 @@ class lfproc:
             plist = merge_patches((DASdata,newdata))
             DASdata = _check_merge(plist)
             # low pass filter and down sample
-            lfDAS = DASdata.pass_filter(time=(None,1/dt/2*0.9))\
-                            .sel(time=time_grid[data_end-buff_size:new_data_end-buff_size]
-                                    ,method='nearest')
-            lfDAS = lfDAS.update_attrs(d_time=dt)
-            # output result
-            filename = _get_filename(lfDAS.attrs['time_min'],
-                        lfDAS.attrs['time_max'])
-            filename = self._output_folder + '/' + filename
-            lfDAS.save_pickle(filename)
+            lp_process(DASdata,data_end-buff_size,new_data_end-buff_size)
+            return DASdata
+
+        # processing for the rest of the dataset
+        data_end = patch_size
+        new_data_end = data_end + patch_size-2*buff_size
+        while new_data_end < len(time_grid):
+            # readin new data
+            DASdata = merge_and_process(DASdata)
             # update index
             data_end = new_data_end
             new_data_end = data_end + patch_size-2*buff_size
+        
+        # dealing with the rest of data smaller than patch_size
+        if (len(time_grid)-data_end)>1:
+            new_data_end = len(time_grid)-1
+            DASdata = merge_and_process(DASdata)
     
     ### property definiations    
 
@@ -122,3 +132,9 @@ def _get_filename(bgtime,edtime) -> str:
     filename = 'LFDAS_' + _get_timestr(bgtime)\
                 + '_' + _get_timestr(edtime) + '.p'
     return filename
+
+def plot_results(plist,cx=np.array([-1,1])):
+    for p in plist:
+        p._data_array.plot(cmap='seismic',yincrease=False
+                ,vmin=cx[0],vmax=cx[1],ax=plt.gca(),add_colorbar=False)
+    plt.xlim(plist[0].attrs['time_min'],plist[-1].attrs['time_max'])

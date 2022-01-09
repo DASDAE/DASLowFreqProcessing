@@ -1,2 +1,2 @@
 # DASLowFreqProcessing
- Low frequency processing for a patch of DAS data
+ Low frequency processing for a spool of DAS data
