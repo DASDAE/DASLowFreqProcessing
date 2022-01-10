@@ -126,6 +126,7 @@ def _check_merge(plist):
 
 def _get_timestr(bgtime:np.datetime64) -> str:
     timestr = str(bgtime.astype('datetime64[ms]'))[:21]
+    timestr = timestr.replace(':','') # for windows compatable
     return timestr
     
 def _get_filename(bgtime,edtime) -> str:
