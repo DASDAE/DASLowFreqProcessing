@@ -136,6 +136,7 @@ def _get_filename(bgtime,edtime) -> str:
 
 def plot_results(plist,cx=np.array([-1,1])):
     for p in plist:
-        p._data_array.plot(cmap='seismic',yincrease=False
+        pm = p._data_array.plot(cmap='seismic',yincrease=False
                 ,vmin=cx[0],vmax=cx[1],ax=plt.gca(),add_colorbar=False)
+    plt.colorbar(pm)
     plt.xlim(plist[0].attrs['time_min'],plist[-1].attrs['time_max'])
