@@ -121,7 +121,7 @@ class spool:
             p = self._reader(file,bgtime,edtime)
             patch_list.append(p)
 
-        merged_patch = merge_patches(patch_list)
+        merged_patch = merge_patches(patch_list,check_history=False)
 
         return merged_patch
 
@@ -131,7 +131,7 @@ class spool:
         else:
             return self._get_data_nopl(bgtime,edtime)
 
-    def get_time_segments(self,max_dt=None):
+    def get_time_segments(self,gap_tolerance=1.5):
         """
         Spool method to obtain continuous time segments in the spool.
         by checking the time differnce between start_timea and end_time
@@ -143,7 +143,7 @@ class spool:
         dt = (df['start_time'].iloc[1:].values - df['end_time'].iloc[:-1].values)\
                 /np.timedelta64(1,'s')
 
-        max_dt = np.median(dt)*1.5
+        max_dt = np.median(dt)*gap_tolerance
         ind = np.where(dt > max_dt)[0]
         ind = np.concatenate(([-1],ind,[len(df)-1]))
 

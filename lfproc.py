@@ -30,7 +30,8 @@ class lfproc:
     def _default_process_parameters(self):
         para = {'output_sample_interval': 1.0, # in seconds
                 'process_patch_size':100, # in output sample interval
-                'edge_buff_size':10  # in output sample interval
+                'edge_buff_size':10,  # in output sample interval
+                'data_gap_tolorance':10.0
         }
         return para
 
@@ -49,7 +50,8 @@ class lfproc:
         patch_size = self._para['process_patch_size']
         buff_size = self._para['edge_buff_size']
 
-        time_grid = (np.arange(bgtime,edtime,
+        time_grid = (np.arange(bgtime.astype('datetime64[ns]')
+                ,edtime.astype('datetime64[ns]'),
                 np.timedelta64(int(dt*1000),'ms')))
         
         if len(time_grid)<=patch_size:
@@ -58,8 +60,7 @@ class lfproc:
         def lp_process(DASdata,bgind, edind):
             # low pass filter and downsampling
             lfDAS = DASdata.pass_filter(time=(None,1/dt/2*0.9))\
-                        .sel(time=time_grid[bgind:edind]
-                        ,method='nearest')
+                        .interpolate(time=time_grid[bgind:edind])
             lfDAS = lfDAS.update_attrs(d_time=dt)
             # output the result to output folder
             filename = _get_filename(lfDAS.attrs['time_min'],
@@ -79,7 +80,7 @@ class lfproc:
             newdata = _check_merge(plist)
             # merge with existing one
             DASdata = DASdata.select(time=(time_grid[data_end-2*buff_size],None))
-            plist = merge_patches((DASdata,newdata))
+            plist = merge_patches((DASdata,newdata),tolerance=10.0)
             DASdata = _check_merge(plist)
             # low pass filter and down sample
             lp_process(DASdata,data_end-buff_size,new_data_end-buff_size)
