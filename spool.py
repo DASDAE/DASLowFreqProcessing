@@ -44,6 +44,7 @@ class spool:
         self._partial_reading = support_partial_reading
         self._cashe_size_limit = 1.0 # in GB
         self._cashe = OrderedDict({})
+        self._data_gas_tol = 10.0
         pass
 
     def set_database(self,df):
@@ -106,7 +107,7 @@ class spool:
             p = p.select(time=(bgtime,edtime))
             patch_list.append(p)
         
-        merged_patch = merge_patches(patch_list)
+        merged_patch = merge_patches(patch_list,tolerance=self._data_gas_tol)
 
         return merged_patch
         
@@ -121,7 +122,7 @@ class spool:
             p = self._reader(file,bgtime,edtime)
             patch_list.append(p)
 
-        merged_patch = merge_patches(patch_list,check_history=False)
+        merged_patch = merge_patches(patch_list,tolerance=self._data_gas_tol)
 
         return merged_patch
 
@@ -131,7 +132,7 @@ class spool:
         else:
             return self._get_data_nopl(bgtime,edtime)
 
-    def get_time_segments(self,gap_tolerance=1.5):
+    def get_time_segments(self):
         """
         Spool method to obtain continuous time segments in the spool.
         by checking the time differnce between start_timea and end_time
@@ -139,6 +140,7 @@ class spool:
         max_dt: maximum time difference tolerance for continuous data 
         """
         df = self._df
+        gap_tolerance=self._data_gas_tol
 
         dt = (df['start_time'].iloc[1:].values - df['end_time'].iloc[:-1].values)\
                 /np.timedelta64(1,'s')
@@ -152,6 +154,8 @@ class spool:
         for i in range(len(ind)-1):
             bgtime = df['start_time'].iloc[ind[i]+1]
             edtime = df['end_time'].iloc[ind[i+1]]
+            bgtime = np.datetime64(bgtime)
+            edtime = np.datetime64(edtime)
             time_segs.append((bgtime,edtime))
         
         return time_segs
